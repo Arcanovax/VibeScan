@@ -4,14 +4,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from .jev import Jev
-
-from rich.console import Console
-
-
 from .visu import export_html
-
-
-console = Console()
+from .question import Question
 
 
 def get_api_key():
@@ -38,7 +32,7 @@ def scan_directory(directory: Path, jev: Jev):
         if "__pycache__" in path.parts:
             continue
 
-        if ".py" not in path._str:
+        if not path._str.endswith((".py", ".c", ".rs")):
             continue
 
         if not path.is_file():
@@ -75,7 +69,7 @@ def main():
 
     jev = Jev(get_api_key())
 
-    console.print(
+    print(
         f"Scanning {directory}"
     )
 
@@ -84,7 +78,69 @@ def main():
         jev,
     )
 
-    export_html(directory, results)
+    root = {"name": directory.name or str(directory), "children": {}}
+
+    for path, answer in results.items():
+        try:
+            rel = path.relative_to(directory)
+        except ValueError:
+            continue
+
+        node = root
+        for part in rel.parts[:-1]:
+            node = node["children"].setdefault(part,
+                                               {"name": part, "children": {}})
+
+        lines = get_lines(path)
+        node["children"][rel.parts[-1]] = {
+            "name": rel.parts[-1],
+            "path": rel.as_posix(),
+            "lines": lines,
+            "score": get_score(answer),
+            "answers": {
+                name: {
+                    "answer": str(getattr(content, "answer", "?")),
+                    "confidence": getattr(content, "confidence", None),
+                }
+                for name, content in answer.items()
+            },
+        }
+    export_html(root)
+
+
+def get_score(answers):
+    report = "Does this is made by ia or human, here the report of several" \
+             "questions to see if the code is made by ia:"
+    for name, res in answers.items():
+        report += f"{name}, {res.intruction} Answer: {res.answer} (confidence:\
+{res.confidence})\n"
+
+    jev = Jev(get_api_key())
+    name = "final_answer"
+    response = jev.get_response({name: Question(
+            name="narrating_comments",
+            type="score",
+            intruction=(
+                report
+            ),
+            criteria=[
+                "it's made by a human",
+                "it's made with ia or helped by ia",
+            ],
+        )}, report)
+
+    response.raise_for_status()
+    answer = response.json().get("answers", {}).get(name).get('score')
+    return answer
+
+
+def get_lines(path: Path):
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0, 0
+    lines = text.splitlines()
+    return len(lines)
 
 
 if __name__ == "__main__":

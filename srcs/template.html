@@ -33,12 +33,12 @@
 			parentOf.set(n, p);
 			if(n.children){
 				n.children.forEach(c => prep(c, n));
-				n.loc = 0; n.w = 0; n.wsum = 0; n.wloc = 0; n.files = 0;
-				n.children.forEach(c => { n.loc += c.loc; n.w += c.w; n.wsum += c.wsum; n.wloc += c.wloc; n.files += c.files; });
+				n.lines = 0; n.w = 0; n.wsum = 0; n.wloc = 0; n.files = 0;
+				n.children.forEach(c => { n.lines += c.lines; n.w += c.w; n.wsum += c.wsum; n.wloc += c.wloc; n.files += c.files; });
 				n.children.sort((a, b) => b.w - a.w || a.name.localeCompare(b.name));
 				n.score = n.wloc ? n.wsum / n.wloc : null;
 			} else {
-				n.w = Math.max(n.loc, 1);
+				n.w = Math.max(n.lines, 1);
 				n.wsum = n.score != null ? n.w * n.score : 0;
 				n.wloc = n.score != null ? n.w : 0;
 				n.files = 1;
@@ -127,7 +127,7 @@
 						background: color(c.score),
 						opacity: dimmed(c) ? 0.14 : 1
 						});
-						cell.title = `${c.path}\nScore IA : ${pct(c.score)}\n${c.loc} lignes de code`;
+						cell.title = `${c.path}\nIA Score: ${pct(c.score)}\n${c.lines} lines`;
 						if(r.w > 54 && r.h > 20){
 						cell.textContent = c.name;
 						if(r.h > 36){ const s = document.createElement('small'); s.className = 'block opacity-80'; s.textContent = pct(c.score); cell.appendChild(s); }
@@ -173,7 +173,7 @@
 				if(selected){
 					const n = selected;
 					h += `<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Files</h3><div class="text-sm font-semibold break-all">${esc(n.name)}</div><div class="text-[11px] text-slate-400 break-all mb-2">${esc(n.path)}</div>`;
-					h += `<div class="text-3xl font-bold" style="color:${color(n.score)}">${pct(n.score)}</div><div class="text-slate-400">IA rate,  ${n.loc} lines (${n.lines} in total)</div>`;
+					h += `<div class="text-3xl font-bold" style="color:${color(n.score)}">${pct(n.score)}</div><div class="text-slate-400">IA rate (${n.lines} lines in total)</div>`;
 					const keys = Object.keys(n.answers || {});
 					if(keys.length){
 					h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Scan</h3>';
@@ -187,7 +187,7 @@
 				} else {
 					h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Files</h3><p class="text-slate-400">Click on a file to see data</p>';
 				}
-				const top = allFiles.filter(f => f.score != null).sort((a, b) => b.score - a.score || b.loc - a.loc).slice(0, 8);
+				const top = allFiles.filter(f => f.score != null).sort((a, b) => b.score - a.score).slice(0, 8);
 				h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Most suspects</h3>';
 				top.forEach((f, i) => { h += `<div class="sus flex justify-between gap-2 py-1 cursor-pointer border-b border-slate-800 hover:text-sky-400" data-i="${i}"><span class="truncate">${esc(f.path)}</span><span class="shrink-0 tabular-nums" style="color:${color(f.score)}">${pct(f.score)}</span></div>`; });
 				side.innerHTML = h;
