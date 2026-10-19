@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="fr">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>VibeScan</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+	</head>
+	<body class="h-screen flex flex-col bg-slate-950 text-slate-200 text-[13px] leading-snug font-sans antialiased">
+		<header class="flex flex-wrap items-center gap-x-7 gap-y-3 px-5 py-3 border-b border-slate-800 bg-slate-900">
+			<h1 id="title" class="text-[15px] font-semibold">VibeScan</h1>
+			<div><b id="s-files" class="block text-base">–</b><span class="text-[11px] uppercase tracking-wide text-slate-400">files</span></div>
+			<div><b id="s-avg" class="block text-base">–</b><span class="text-[11px] uppercase tracking-wide text-slate-400">IA rate</span></div>
+			<div><b id="s-hot" class="block text-base">–</b><span class="text-[11px] uppercase tracking-wide text-slate-400">files ≥ 70 %</span></div>
+			<label class="flex items-center gap-2 text-slate-400 sm:ml-auto">Filter ≥ <input id="thr" type="range" min="0" max="100" step="5" value="0" class="w-36 accent-sky-400"> <b id="thr-v" class="w-10 text-slate-200">0 %</b></label>
+		</header>
+		<main class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[330px_minmax(0,1fr)_290px] max-lg:overflow-auto">
+			<aside id="tree" class="min-h-0 overflow-auto py-2 lg:border-r border-slate-800"></aside>
+			<section id="mapwrap" class="min-h-0 min-w-0 flex flex-col max-lg:min-h-[480px]">
+				<div id="crumbs" class="px-3.5 py-2 border-b border-slate-800 text-slate-400"></div>
+				<div id="map" class="relative flex-1 min-h-[300px] m-2.5 overflow-hidden"></div>
+			</section>
+			<aside id="side" class="min-h-0 overflow-auto p-3.5 lg:border-l border-slate-800"></aside>
+		</main>
+		<script>
+			const DATA = {"name": "VibeScan", "children": [{"name": "data", "children": [{"name": "code.py", "path": "data/code.py", "loc": 43, "lines": 61, "score": 0.22, "answers": {"is_made_by_ai": {"answer": "true", "confidence": 0.22}, "obvious_comments": {"answer": "false", "confidence": 0.96}, "uniform_docstrings": {"answer": "false", "confidence": 0.58}, "step_comments": {"answer": "false", "confidence": 0.6}, "over_defensive": {"answer": "false", "confidence": 0.78}, "human_traces": {"answer": "false", "confidence": 0.6}}}, {"name": "ia.py", "path": "data/ia.py", "loc": 75, "lines": 103, "score": 0.44, "answers": {"is_made_by_ai": {"answer": "true", "confidence": 0.44}, "obvious_comments": {"answer": "true", "confidence": 0.86}, "uniform_docstrings": {"answer": "true", "confidence": 0.26}, "step_comments": {"answer": "false", "confidence": 0.5}, "over_defensive": {"answer": "false", "confidence": 0.78}, "human_traces": {"answer": "false", "confidence": 0.46}}}]}, {"name": "srcs", "children": [{"name": "__main__.py", "path": "srcs/__main__.py", "loc": 55, "lines": 91, "score": 0.98, "answers": {"is_made_by_ai": {"answer": "false", "confidence": 0.02}, "obvious_comments": {"answer": "false", "confidence": 0.98}, "uniform_docstrings": {"answer": "false", "confidence": 0.46}, "step_comments": {"answer": "false", "confidence": 0.56}, "over_defensive": {"answer": "false", "confidence": 0.88}, "human_traces": {"answer": "false", "confidence": 0.54}}}, {"name": "jev.py", "path": "srcs/jev.py", "loc": 109, "lines": 130, "score": 0.26, "answers": {"is_made_by_ai": {"answer": "false", "confidence": 0.74}, "obvious_comments": {"answer": "false", "confidence": 0.74}, "uniform_docstrings": {"answer": "false", "confidence": 0.74}, "step_comments": {"answer": "false", "confidence": 0.62}, "over_defensive": {"answer": "false", "confidence": 0.74}, "human_traces": {"answer": "false", "confidence": 0.6}}}, {"name": "question.py", "path": "srcs/question.py", "loc": 15, "lines": 16, "score": 0.6799999999999999, "answers": {"is_made_by_ai": {"answer": "false", "confidence": 0.32}, "obvious_comments": {"answer": "false", "confidence": 0.94}, "uniform_docstrings": {"answer": "false", "confidence": 0.08}, "step_comments": {"answer": "false", "confidence": 0.6}, "over_defensive": {"answer": "false", "confidence": 0.9}, "human_traces": {"answer": "false", "confidence": 0.68}}}, {"name": "visu.py", "path": "srcs/visu.py", "loc": 63, "lines": 79, "score": 0.04, "answers": {"is_made_by_ai": {"answer": "true", "confidence": 0.04}, "obvious_comments": {"answer": "false", "confidence": 0.96}, "uniform_docstrings": {"answer": "false", "confidence": 0.48}, "step_comments": {"answer": "false", "confidence": 0.62}, "over_defensive": {"answer": "false", "confidence": 0.88}, "human_traces": {"answer": "false", "confidence": 0.64}}}]}]};
+			const $ = s => document.querySelector(s);
+			const parentOf = new Map();
+			const open = new Set();
+			let thr = 0, zoom = DATA, selected = null;
+
+			function prep(n, p){
+			parentOf.set(n, p);
+			if(n.children){
+				n.children.forEach(c => prep(c, n));
+				n.loc = 0; n.w = 0; n.wsum = 0; n.wloc = 0; n.files = 0;
+				n.children.forEach(c => { n.loc += c.loc; n.w += c.w; n.wsum += c.wsum; n.wloc += c.wloc; n.files += c.files; });
+				n.children.sort((a, b) => b.w - a.w || a.name.localeCompare(b.name));
+				n.score = n.wloc ? n.wsum / n.wloc : null;
+			} else {
+				n.w = Math.max(n.loc, 1);
+				n.wsum = n.score != null ? n.w * n.score : 0;
+				n.wloc = n.score != null ? n.w : 0;
+				n.files = 1;
+			}
+			}
+			prep(DATA, null);
+			open.add(DATA);
+			DATA.children.forEach(c => { if(c.children) open.add(c); });
+
+			const allFiles = [];
+			(function collect(n){ n.children ? n.children.forEach(collect) : allFiles.push(n); })(DATA);
+
+			const color = s => s == null ? '#3a3f4b' : `hsl(${130 * (1 - s)} 62% 42%)`;
+			const pct = s => s == null ? '–' : Math.round(s * 100) + ' %';
+			const dimmed = n => thr > 0 && (n.score == null || n.score < thr);
+
+			function layout(items, x, y, w, h){
+			const out = [];
+			const total = items.reduce((s, i) => s + i.v, 0);
+			if(!total || w <= 0 || h <= 0) return out;
+			const rest = items.map(i => ({ it: i.it, a: i.v / total * w * h }));
+			let row = [];
+			const worst = (r, side) => {
+				const s = r.reduce((t, q) => t + q.a, 0);
+				const mx = Math.max(...r.map(q => q.a)), mn = Math.min(...r.map(q => q.a));
+				return Math.max(side * side * mx / (s * s), s * s / (side * side * mn));
+			};
+			const flush = () => {
+				if(!row.length) return;
+				const s = row.reduce((t, q) => t + q.a, 0);
+				if(w >= h){
+				const rw = s / h; let cy = y;
+				row.forEach(q => { const rh = q.a / rw; out.push({ it: q.it, x, y: cy, w: rw, h: rh }); cy += rh; });
+				x += rw; w -= rw;
+				} else {
+				const rh = s / w; let cx = x;
+				row.forEach(q => { const rw = q.a / rh; out.push({ it: q.it, x: cx, y, w: rw, h: rh }); cx += rw; });
+				y += rh; h -= rh;
+				}
+				row = [];
+			};
+			while(rest.length){
+				const side = Math.min(w, h);
+				const next = rest[0];
+				if(!row.length || worst(row.concat(next), side) <= worst(row, side)){ row.push(next); rest.shift(); }
+				else flush();
+			}
+			flush();
+			return out;
+			}
+
+			function el(cls, r, extra){
+			const d = document.createElement('div');
+			d.className = cls;
+			d.style.left = r.x + 'px'; d.style.top = r.y + 'px';
+			d.style.width = r.w + 'px'; d.style.height = r.h + 'px';
+			if(extra) Object.assign(d.style, extra);
+			return d;
+			}
+
+			function drawMap(){
+				const box = $('#map');
+				box.innerHTML = '';
+				const W = box.clientWidth, H = box.clientHeight;
+
+				(function fill(n, x, y, w, h){
+					if(w <= 2 || h <= 2) return;
+					const rects = layout(n.children.map(c => ({ it: c, v: c.w })), x, y, w, h);
+					rects.forEach(r => {
+					const c = r.it;
+					if(r.w < 3 || r.h < 3) return;
+					if(c.children){
+						box.appendChild(el('absolute rounded border border-white/15 bg-white/[.03] pointer-events-none', r));
+						const showHead = r.w > 46 && r.h > 34;
+						if(showHead){
+						const hd = el('absolute px-1 text-[10.5px] leading-4 text-slate-400 truncate cursor-pointer z-[2] hover:text-slate-100', { x: r.x + 2, y: r.y + 1, w: r.w - 4, h: 16 });
+						hd.textContent = c.name + '/  ' + pct(c.score);
+						hd.title = 'Zoomer sur ' + c.name;
+						hd.onclick = () => { zoom = c; render(); };
+						box.appendChild(hd);
+						}
+						const hh = showHead ? 17 : 0;
+						fill(c, r.x + 2, r.y + hh + 1, r.w - 4, r.h - hh - 3);
+					} else {
+						const cell = el('absolute overflow-hidden rounded-sm border border-black/40 px-1 py-0.5 text-[11px] text-white cursor-pointer transition-opacity [text-shadow:0_1px_2px_rgba(0,0,0,.6)] hover:z-10 hover:outline hover:outline-2 hover:outline-white' + (c === selected ? ' z-10 outline outline-2 outline-white' : ''), r, {
+						background: color(c.score),
+						opacity: dimmed(c) ? 0.14 : 1
+						});
+						cell.title = `${c.path}\nScore IA : ${pct(c.score)}\n${c.loc} lignes de code`;
+						if(r.w > 54 && r.h > 20){
+						cell.textContent = c.name;
+						if(r.h > 36){ const s = document.createElement('small'); s.className = 'block opacity-80'; s.textContent = pct(c.score); cell.appendChild(s); }
+						}
+						cell.onclick = () => { select(c); };
+						box.appendChild(cell);
+					}
+					});
+				})(zoom, 0, 0, W, H);
+			}
+
+			function drawTree(){
+				const root = $('#tree');
+				root.innerHTML = '';
+				(function walk(n, depth){
+					const row = document.createElement('div');
+					row.className = 'group flex items-center gap-1.5 py-[3px] pr-2.5 cursor-pointer whitespace-nowrap hover:bg-slate-800/70' + (n === selected ? ' bg-sky-900/50' : '');
+					row.style.paddingLeft = (10 + depth * 14) + 'px';
+					const isDir = !!n.children;
+					row.innerHTML = `<span class="w-3 text-center text-slate-500">${isDir ? (open.has(n) ? '▾' : '▸') : ''}</span>` +
+					`<span class="flex-1 truncate">${esc(n.name)}${isDir ? '/' : ''}</span>` +
+					(isDir ? `<span class="text-[11px] text-slate-500">${n.files}</span><span class="zoom invisible group-hover:visible text-slate-500 hover:text-sky-400" title="Zoomer le treemap">⌖</span>` : '') +
+					`<span class="w-[54px] h-1.5 rounded bg-slate-800 overflow-hidden"><b class="block h-full" style="width:${n.score == null ? 0 : n.score * 100}%;background:${color(n.score)}"></b></span>` +
+					`<span class="w-9 text-right text-[11px] tabular-nums text-slate-400">${pct(n.score)}</span>`;
+					if(dimmed(n)) row.style.opacity = .4;
+					row.onclick = e => {
+					if(isDir){
+						if(e.target.classList.contains('zoom')){ zoom = n; render(); return; }
+						open.has(n) ? open.delete(n) : open.add(n);
+						drawTree();
+					} else select(n);
+					};
+					root.appendChild(row);
+					if(isDir && open.has(n)) n.children.forEach(c => walk(c, depth + 1));
+				})(DATA, 0);
+			}
+
+			const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+			function drawSide(){
+				const side = $('#side');
+				let h = '';
+				if(selected){
+					const n = selected;
+					h += `<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Files</h3><div class="text-sm font-semibold break-all">${esc(n.name)}</div><div class="text-[11px] text-slate-400 break-all mb-2">${esc(n.path)}</div>`;
+					h += `<div class="text-3xl font-bold" style="color:${color(n.score)}">${pct(n.score)}</div><div class="text-slate-400">IA rate,  ${n.loc} lines (${n.lines} in total)</div>`;
+					const keys = Object.keys(n.answers || {});
+					if(keys.length){
+					h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Scan</h3>';
+					keys.forEach(k => {
+						const a = n.answers[k];
+						const c = a.confidence;
+						h += `<div class="my-2"><div class="flex justify-between"><span>${esc(k)}</span><span class="text-slate-400">${esc(a.answer)}${c != null ? ' · ' + (c * 100).toFixed(0) + ' %' : ''}</span></div>` +
+						(c != null ? `<div class="h-[5px] mt-1 rounded bg-slate-800 overflow-hidden"><b class="block h-full bg-sky-400" style="width:${c * 100}%"></b></div>` : '') + '</div>';
+					});
+					} else h += '<p class="text-slate-400">Aucun résultat pour ce fichier.</p>';
+				} else {
+					h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Files</h3><p class="text-slate-400">Click on a file to see data</p>';
+				}
+				const top = allFiles.filter(f => f.score != null).sort((a, b) => b.score - a.score || b.loc - a.loc).slice(0, 8);
+				h += '<h3 class="mt-5 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-400">Most suspects</h3>';
+				top.forEach((f, i) => { h += `<div class="sus flex justify-between gap-2 py-1 cursor-pointer border-b border-slate-800 hover:text-sky-400" data-i="${i}"><span class="truncate">${esc(f.path)}</span><span class="shrink-0 tabular-nums" style="color:${color(f.score)}">${pct(f.score)}</span></div>`; });
+				side.innerHTML = h;
+				side.querySelectorAll('.sus').forEach(d => d.onclick = () => select(top[+d.dataset.i]));
+			}
+
+			function draw_path(){
+				const chain = [];
+				for(let n = zoom; n; n = parentOf.get(n)) chain.unshift(n);
+				const c = $('#crumbs');
+				c.innerHTML = '';
+				chain.forEach((n, i) => {
+					const a = document.createElement(i === chain.length - 1 ? 'span' : 'a');
+					a.textContent = n.name; a.className = i < chain.length - 1 ? 'text-sky-400 cursor-pointer hover:underline' : 'text-slate-200';
+					if(i < chain.length - 1) a.onclick = () => { zoom = n; render(); };
+					c.appendChild(a);
+					if(i < chain.length - 1) c.appendChild(document.createTextNode(' / '));
+				});
+				}
+
+				function select(n){
+				selected = n;
+				for(let p = parentOf.get(n); p; p = parentOf.get(p)) open.add(p);
+				render();
+			}
+
+			function render(){
+				draw_path();
+				drawMap();
+				drawTree();
+				drawSide();
+			}
+
+			$('#title').textContent = 'Vibe Scan';
+			$('#s-files').textContent = allFiles.length;
+			$('#s-avg').textContent = pct(DATA.score);
+			$('#s-hot').textContent = allFiles.filter(f => f.score != null && f.score >= 0.7).length;
+			$('#thr').oninput = e => { thr = +e.target.value / 100; $('#thr-v').textContent = e.target.value + ' %'; render(); };
+			addEventListener('resize', drawMap);
+			render();
+		</script>
+	</body>
+</html>

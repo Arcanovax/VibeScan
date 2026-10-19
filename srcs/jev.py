@@ -1,6 +1,6 @@
 import json
 import requests
-from question import Question
+from .question import Question
 
 
 class Jev:
@@ -36,15 +36,12 @@ class Jev:
 
         answers = response.json().get("answers", {})
 
-        # IMPORTANT :
-        # On crée un nouveau dictionnaire pour CE scan.
         results = {}
 
         for name, answer in answers.items():
 
             question = self.questions[name]
 
-            # On crée une copie de la Question
             result = Question(
                 name=question.name,
                 type=question.type,
@@ -131,4 +128,3 @@ class Jev:
                 "false": "No",
             },
         ))
-

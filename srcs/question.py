@@ -3,7 +3,7 @@ class Question:
         self.name = name
         self.type = type
         self.intruction = intruction
-        self.criteria:dict = criteria
+        self.criteria: dict = criteria
         self.probabilities = None
         self.answer = None
         self.confidence = None
@@ -14,4 +14,3 @@ class Question:
             "instruction": self.intruction,
             "criteria": self.criteria
         }
-    
