@@ -13,6 +13,25 @@ Here are the results of running the scan on the project, including An “example
 
 https://matisse-dev.me/VibeScanDemo
 
+## Workflow
+
+```mermaid
+graph TD
+    classDef main fill:#BBDEFB,stroke:#1565C0,stroke-width:2px,color:black;
+    classDef ai fill:#E1BEE7,stroke:#6A1B9A,stroke-width:2px,color:black;
+
+    Repo[("Source Code<br/>")]:::main
+    Questions["Jev:<br/>Answer a list of questions per file"]:::ai
+    Notes["Jev:<br/> Grade the AI score for each file based on the answers"]:::ai
+    Verdict["Visual:<br/>Displays the AI scores for each file in the file tree "]:::main
+
+
+    Repo -->|files| Questions
+    Questions -->|Answers per files| Notes
+    Notes -->|all file score| Verdict
+```
+
+
 ## Installation
 
 Clone the repository and install the dependencies using [uv](https://docs.astral.sh/uv/):
