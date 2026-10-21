@@ -3,21 +3,21 @@ from pathlib import Path
 import webbrowser
 
 
-def _finalize(node):
+def _format_data(node):
     if "children" in node:
         return {
             "name": node["name"],
-            "children": [_finalize(c) for c in node["children"].values()],
+            "children": [_format_data(c) for c in node["children"].values()],
         }
     return node
 
 
-def export_html(data: dict, output="scan.html") -> Path:
+def export_html(data: dict, output="scan.html"):
 
     with (open("srcs/template.html", "r") as f):
         HTML_TEMPLATE = f.read()
 
-    payload = json.dumps(_finalize(data),
+    payload = json.dumps(_format_data(data),
                          ensure_ascii=False).replace("</", "<\\/")
     html = HTML_TEMPLATE.replace("__DATA__", payload)
     out = Path(output).resolve()
