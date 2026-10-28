@@ -3,7 +3,7 @@ UV_RUN	= uv run
 ARGS	?=
 
 run: install
-	@$(UV_RUN) -m src $(ARGS)
+	@$(UV_RUN) -m srcs $(ARGS)
 
 install:
 	uv sync
