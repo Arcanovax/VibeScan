@@ -1,10 +1,12 @@
 import argparse
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from dulwich import porcelain
+from dulwich.errors import GitProtocolError
 
 from .jev import Jev
 from .visu import export_html
@@ -75,7 +77,7 @@ class Parser:
         self._parser.add_argument("--code", default=".")
         self._parser.add_argument("--git", default=None)
         self._parser.add_argument("--branch", default="main")
-        self._parser.add_argument("--dist", default="dist")
+        self._parser.add_argument("--dist", default="dist/")
 
         self._args = self._parser.parse_args()
 
@@ -83,21 +85,31 @@ class Parser:
         return self._args
 
     def get_directory_path(self) -> Path:
-        if self.get_args().git:
-            porcelain.clone(
-                self._args.git,
-                self._args.dist,
-                checkout=self._args.branch
-            )
-            return Path(self._args.dist).resolve()
-        return Path(self._args.code).resolve()
+            if self.get_args().git:
+                dist_path = Path(self._args.dist).resolve()
+
+                if dist_path.exists():
+                    shutil.rmtree(dist_path)
+
+                dist_path.mkdir(parents=True, exist_ok=True)
+
+                porcelain.clone(
+                    self._args.git,
+                    str(dist_path),
+                    branch=self._args.branch,
+                    checkout=True
+                )
+
+                return dist_path
+
+            return Path(self._args.code).resolve()
 
 
 def main():
     parser = Parser()
     try:
         directory = parser.get_directory_path()
-    except PermissionError as e:
+    except (PermissionError, GitProtocolError) as e:
         print(e)
         return
 
