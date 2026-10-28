@@ -1,8 +1,11 @@
-import os
 import argparse
+import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
+from dulwich import porcelain
+
 from .jev import Jev
 from .visu import export_html
 
@@ -63,14 +66,40 @@ def get_lines(path: Path):
     lines = text.splitlines()
     return len(lines)
 
+class Parser:
+    _parser: argparse.ArgumentParser
+    _args: Any
+
+    def __init__(self) -> None:
+        self._parser = argparse.ArgumentParser()
+        self._parser.add_argument("--code", default=".")
+        self._parser.add_argument("--git", default=None)
+        self._parser.add_argument("--branch", default="main")
+        self._parser.add_argument("--dist", default="dist")
+
+        self._args = self._parser.parse_args()
+
+    def get_args(self) -> Any:
+        return self._args
+
+    def get_directory_path(self) -> Path:
+        if self.get_args().git:
+            porcelain.clone(
+                self._args.git,
+                self._args.dist,
+                checkout=self._args.branch
+            )
+            return Path(self._args.dist).resolve()
+        return Path(self._args.code).resolve()
+
 
 def main():
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--code", default=".")
-    args = parser.parse_args()
-
-    directory = Path(args.code).resolve()
+    parser = Parser()
+    try:
+        directory = parser.get_directory_path()
+    except PermissionError as e:
+        print(e)
+        return
 
     jev = Jev(get_api_key())
 
