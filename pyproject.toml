@@ -3,7 +3,7 @@ name = "vibescan"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13.1"
 dependencies = [
     "argparse>=1.4.0",
     "dotenv>=0.9.9",
@@ -12,4 +12,5 @@ dependencies = [
     "readchar>=4.2.2",
     "requests>=2.34.2",
     "rich>=15.0.0",
+    "dulwich==1.2.20"
 ]
